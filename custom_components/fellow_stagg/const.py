@@ -1,3 +1,5 @@
+import re
+
 DOMAIN = "fellow_stagg"
 
 # Default temperature limits (C / F) for the EKG Pro Wi‑Fi CLI API
@@ -142,3 +144,14 @@ MELODY_SEQUENCES = {
     "Bb4:180 Bb4:180 A4:360 F4:360 G4:360 F4:600"
   ),
 }
+
+
+def kettle_unique_id(name: str | None) -> str | None:
+  """Config entry unique_id for a kettle: its own name (EKG-xx-xx-xx), lowercased.
+
+  The same name is the kettle's BLE local name, its DHCP hostname and the CLI's
+  m_our_device_name, so every discovery source and the configured entry agree on it,
+  and it survives IP changes. None when the name is unknown or not a kettle name.
+  """
+  n = (name or "").strip().lower()
+  return n if re.fullmatch(r"ekg-[0-9a-f][0-9a-f-]*", n) else None

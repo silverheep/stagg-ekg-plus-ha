@@ -48,6 +48,7 @@ from .const import (
   SETTINGS_CACHE_MAX_AGE_FAST_SECONDS,
   MIN_TEMP_F,
   MAX_TEMP_F,
+  kettle_unique_id,
 )
 from homeassistant.exceptions import HomeAssistantError
 from .kettle_http import (
@@ -1201,6 +1202,26 @@ async def _async_learn_device_name(
     return
   if name and entry.data.get("device_name") != name:
     hass.config_entries.async_update_entry(entry, data={**entry.data, "device_name": name})
+  _async_ensure_kettle_unique_id(hass, entry)
+
+
+@callback
+def _async_ensure_kettle_unique_id(hass: HomeAssistant, entry: ConfigEntry) -> None:
+  """Key the entry by the kettle's name (EKG-xx-xx-xx), shared by every discovery source.
+
+  Entries made from a typed URL were keyed by that URL, and Bluetooth discovery had no
+  unique_id at all, so the same kettle kept reappearing in Discovered and Ignore did not stick.
+  """
+  uid = kettle_unique_id(entry.data.get("device_name"))
+  if not uid or entry.unique_id == uid:
+    return
+  if any(
+    other.entry_id != entry.entry_id and other.unique_id == uid
+    for other in hass.config_entries.async_entries(DOMAIN)
+  ):
+    return  # another entry (or an ignored discovery) already holds it and blocks rediscovery
+  _LOGGER.debug("Fellow Stagg: setting unique_id of %s to %s", entry.entry_id, uid)
+  hass.config_entries.async_update_entry(entry, unique_id=uid)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -1212,6 +1233,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
   if entry.unique_id:
     persistent_notification.async_dismiss(hass, f"fellow_stagg_discovery_{entry.unique_id}")
   data = entry.data or {}
+  if data.get("base_url"):
+    persistent_notification.async_dismiss(hass, f"fellow_stagg_discovery_{data['base_url']}")
   ble_addr = data.get("ble_address") or (entry.unique_id and str(entry.unique_id).startswith("ble:") and entry.unique_id[4:])
   if ble_addr:
     _norm = (str(ble_addr).strip().lower().replace("-", "").replace(":", ""))
@@ -1223,6 +1246,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     persistent_notification.async_dismiss(hass, f"fellow_stagg_discovery_ble_{_nid}")
   if entry.source == SOURCE_IGNORE:
     return True
+  _async_ensure_kettle_unique_id(hass, entry)
   base_url: str | None = entry.data.get("base_url")
   if base_url is None and entry.options.get("connection_mode", entry.data.get("connection_mode", "wifi")) != "ble":
     return False
