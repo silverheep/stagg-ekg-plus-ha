@@ -143,10 +143,32 @@ def _build_base_url(host: str, port: int | None) -> str:
 
 
 def _norm_url(u: str | None) -> str:
-    """Normalize URL for comparison (strip, no trailing slash, lowercased)."""
+    """Normalize URL for comparison and keys.
+
+    http:// when no scheme, lowercased scheme and host, default port (80/443) dropped,
+    no trailing slash, so "http://IP/", "IP" and "http://IP:80" are the same kettle.
+    """
     if not u or not isinstance(u, str):
         return ""
-    return (u.strip().rstrip("/") or "").lower()
+    s = u.strip().rstrip("/")
+    if not s:
+        return ""
+    if "://" not in s:
+        s = f"http://{s}"
+    try:
+        parsed = urlparse(s)
+        host = (parsed.hostname or "").lower()
+        port = parsed.port
+    except ValueError:
+        return s.lower()
+    if not host:
+        return s.lower()
+    scheme = (parsed.scheme or "http").lower()
+    if ":" in host:
+        host = f"[{host}]"  # IPv6 literal
+    if port and not ((scheme == "http" and port == 80) or (scheme == "https" and port == 443)):
+        host = f"{host}:{port}"
+    return f"{scheme}://{host}{parsed.path.rstrip('/').lower()}"
 
 
 async def _resolve_host_to_ip(hass: Any, host: str | None) -> str | None:
@@ -1313,17 +1335,99 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
     VERSION = 2
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
 
-    def _abort_if_kettle_name_configured(self, name: str | None) -> None:
-        """Abort when a configured entry already has this kettle's name (EKG-xx-xx-xx).
+    @staticmethod
+    def _entry_has_kettle_name(entry: config_entries.ConfigEntry, uid: str) -> bool:
+        """True when the entry's unique_id, device_name or ble_name is this kettle name key."""
+        return uid in (
+            kettle_unique_id(entry.unique_id),
+            kettle_unique_id(entry.data.get("device_name")),
+            kettle_unique_id(entry.data.get("ble_name")),
+        )
+
+    def _async_kettle_entry(
+        self, name: str | None, mac: str | None = None
+    ) -> config_entries.ConfigEntry | None:
+        """The configured (not ignored) entry for this kettle name (EKG-xx-xx-xx) or MAC."""
+        uid = kettle_unique_id(name)
+        for entry in self._async_current_entries(include_ignore=False):
+            if uid and self._entry_has_kettle_name(entry, uid):
+                return entry
+            if mac and entry.data.get("mac") == mac:
+                return entry
+        return None
+
+    def _abort_if_kettle_name_configured(
+        self,
+        name: str | None,
+        updates: dict[str, Any] | None = None,
+        mac: str | None = None,
+    ) -> None:
+        """Abort when a configured entry already is this kettle (by name, or MAC when given).
 
         Covers entries whose unique_id predates the name-based scheme (e.g. a base_url).
+        With updates, changed values are written to that entry and it is reloaded first, so
+        a kettle that moved to a new IP follows it. The name is self-asserted by whatever
+        answered, so callers pass updates only when the source ties it to the kettle
+        independently: a DHCP lease (hostname ekg-* and, when stored, the same MAC), BLE
+        provisioning of this kettle, or an HTTP probe that answered the kettle CLI with
+        this name. A bare _http._tcp record name is never enough.
         """
-        uid = kettle_unique_id(name)
-        if not uid:
+        entry = self._async_kettle_entry(name, mac)
+        if entry is None:
             return
-        for entry in self._async_current_entries(include_ignore=False):
-            if kettle_unique_id(entry.data.get("device_name")) == uid:
+        changed = {
+            k: v
+            for k, v in (updates or {}).items()
+            if v is not None
+            and (
+                _norm_url(entry.data.get(k)) != _norm_url(v)
+                if k == "base_url"
+                else entry.data.get(k) != v
+            )
+        }
+        if changed:
+            _LOGGER.info("Fellow Stagg: updating %s with %s", entry.entry_id, sorted(changed))
+            self.hass.config_entries.async_update_entry(entry, data={**entry.data, **changed})
+            self.hass.config_entries.async_schedule_reload(entry.entry_id)
+        raise data_entry_flow.AbortFlow("already_configured")
+
+    def _abort_if_url_configured(self, base_url: str | None) -> None:
+        """Abort when an entry (or, for discovery, an ignored URL-keyed one) has this URL, normalized."""
+        norm = _norm_url(base_url)
+        if not norm:
+            return
+        for entry in self._async_current_entries():  # ignored entries only for non-user sources
+            if _norm_url(entry.data.get("base_url")) == norm or (
+                entry.source == SOURCE_IGNORE and _norm_url(str(entry.unique_id or "")) == norm
+            ):
                 raise data_entry_flow.AbortFlow("already_configured")
+
+    async def _async_set_network_unique_id(self, base_url: str) -> None:
+        """Key a probed network kettle by its CLI name (else its normalized URL); abort duplicates."""
+        self._abort_if_url_configured(base_url)
+        try:
+            device_name = await KettleHttpClient(base_url).async_get_device_name(
+                async_get_clientsession(self.hass)
+            )
+        except Exception:  # noqa: BLE001 - muted CLI or native HTTP: fall back to the URL
+            device_name = None
+        if device_name:
+            self.context["device_name"] = device_name
+        name = device_name or self.context.get("device_name")
+        self._abort_if_kettle_name_configured(name, mac=self.context.get("mac"))
+        await self.async_set_unique_id(kettle_unique_id(name) or _norm_url(base_url), raise_on_progress=False)
+        self._abort_if_unique_id_configured()
+
+    async def async_step_ignore(self, user_input: dict[str, Any]) -> FlowResult:
+        """Ignore a discovery; keep its BLE address so Ignore holds under the ble: or name key."""
+        await self.async_set_unique_id(user_input["unique_id"], raise_on_progress=False)
+        data: dict[str, Any] = {}
+        for flow in self._async_in_progress(include_uninitialized=True):
+            ctx = flow.get("context") or {}
+            if ctx.get("unique_id") == self.unique_id and ctx.get("ble_address"):
+                data["ble_address"] = ctx["ble_address"]
+                break
+        return self.async_create_entry(title=user_input["title"], data=data)
 
     def _ble_entry_data(self) -> dict[str, Any]:
         """BLE address/name and the kettle's device name/MAC learned during this flow."""
@@ -1375,18 +1479,19 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
             await asyncio.sleep(2)
         if self.unique_id is None or str(self.unique_id).startswith("ble:"):
             await self.async_set_unique_id(
-                kettle_unique_id(self.context.get("device_name")) or base_url,
+                kettle_unique_id(self.context.get("device_name")) or _norm_url(base_url),
                 raise_on_progress=False,
             )
-        for entry in self.hass.config_entries.async_entries(DOMAIN):
-            if entry.source == SOURCE_IGNORE:
-                continue
-            if self.context.get("mac") and entry.data.get("mac") == self.context["mac"]:
-                self.hass.config_entries.async_update_entry(
-                    entry, data={**entry.data, "base_url": base_url, **self._ble_entry_data()}
-                )
-                await self.hass.config_entries.async_reload(entry.entry_id)
-                return self.async_abort(reason="already_configured")
+        # Checked right before creating (the probe loop above can take ~20 s): an entry for
+        # this kettle, by name or MAC, gets the new address instead of being replaced by
+        # async_create_entry with the same unique_id (which would drop its options).
+        # BLE provisioning of this very kettle is an independent tie, so updating is safe.
+        updates = {"base_url": base_url, **self._ble_entry_data()}
+        self._abort_if_kettle_name_configured(
+            self.context.get("device_name"), updates=updates, mac=self.context.get("mac")
+        )
+        self._abort_if_unique_id_configured(updates=updates)
+        self._abort_if_url_configured(base_url)
         data = {"base_url": base_url, "connection_mode": "auto", **self._ble_entry_data()}
         return self.async_create_entry(title=f"Fellow Stagg ({base_url})", data=data)
 
@@ -1436,22 +1541,22 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
         mac = format_mac(discovery_info.macaddress)
         base_url = f"http://{ip}"
         session = async_get_clientsession(self.hass)
+        uid = kettle_unique_id(hostname)
         for entry in self.hass.config_entries.async_entries(DOMAIN):
             if entry.source == SOURCE_IGNORE:
                 continue
-            same_kettle = (
-                entry.data.get("mac") == mac
-                or (entry.data.get("device_name") or "").lower() == hostname
-                or _norm_url(entry.data.get("base_url")) == _norm_url(base_url)
-            )
-            if not same_kettle:
+            mac_match = entry.data.get("mac") == mac
+            name_match = bool(uid) and self._entry_has_kettle_name(entry, uid)
+            url_match = _norm_url(entry.data.get("base_url")) == _norm_url(base_url)
+            if not (mac_match or name_match or url_match):
                 continue
+            # The hostname is self-asserted: follow it only with the stored MAC, or when the
+            # entry has no MAC yet and the lease names a kettle (ekg-*). Otherwise just abort.
+            trusted = mac_match or (bool(uid) and not entry.data.get("mac"))
             updates: dict[str, Any] = {}
-            if entry.data.get("mac") != mac:
+            if trusted and entry.data.get("mac") != mac:
                 updates["mac"] = mac
-            if _norm_url(entry.data.get("base_url")) != _norm_url(base_url) and await _probe_kettle(
-                session, base_url
-            ):
+            if trusted and not url_match and await _probe_kettle(session, base_url):
                 updates["base_url"] = base_url
             if updates:
                 self.hass.config_entries.async_update_entry(entry, data={**entry.data, **updates})
@@ -1462,7 +1567,7 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
 
         if not await _probe_kettle(session, base_url):
             return self.async_abort(reason="not_fellow_stagg")
-        await self.async_set_unique_id(kettle_unique_id(hostname) or base_url)
+        await self.async_set_unique_id(uid or base_url)
         self._abort_if_unique_id_configured()
         self.context["mac"] = mac
         self.context["device_name"] = discovery_info.hostname
@@ -1536,7 +1641,7 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
         base_url = _build_base_url(host, port)
         if not base_url:
             return self.async_abort(reason="invalid_host")
-        self._async_abort_entries_match({"base_url": base_url})
+        self._abort_if_url_configured(base_url)
 
         # Probe: GET /cli?cmd=state and check for our CLI fingerprint (mode=, tempr=)
         session = async_get_clientsession(self.hass)
@@ -1546,7 +1651,12 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
             device_name = await KettleHttpClient(base_url).async_get_device_name(session)
         except Exception:  # noqa: BLE001 - muted CLI or native HTTP: fall back to the URL
             device_name = None
-        self._abort_if_kettle_name_configured(device_name)
+        # device_name is set only when the probed address answered the kettle CLI with
+        # m_our_device_name, so a matching entry (name- or URL-keyed) follows the new IP.
+        # The mDNS record's own name never reaches this update.
+        self._abort_if_kettle_name_configured(
+            device_name, updates={"base_url": base_url} if device_name else None
+        )
 
         # If any existing entry already has this base_url (e.g. added via BLE with ble: unique_id), don't rediscover
         base_norm = _norm_url(base_url)
@@ -1566,7 +1676,7 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
                         return self.async_abort(reason="already_configured")
 
         # The kettle's name when the CLI gives it (stable across IP changes), else base_url
-        await self.async_set_unique_id(kettle_unique_id(device_name) or base_url)
+        await self.async_set_unique_id(kettle_unique_id(device_name) or _norm_url(base_url))
         self._abort_if_unique_id_configured(updates={"base_url": base_url})
         if device_name:
             self.context["device_name"] = device_name
@@ -1594,8 +1704,14 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
             name = discovery_info.get("name") if isinstance(discovery_info, dict) else discovery_info.name
             if not address or not (_is_stagg_ble_device(name) or _has_stagg_service(discovery_info)):
                 return self.async_abort(reason="invalid_discovery_info")
-            for entry in self._async_current_entries():
-                if _normalize_ble_address(entry.options.get("ble_address") or entry.data.get("ble_address")) == _normalize_ble_address(address):
+            # Includes ignored entries (discovery source), whether ignored under the name key
+            # (async_step_ignore stores the address) or under the ble:<addr> fallback.
+            norm_addr = _normalize_ble_address(address)
+            for entry in self._async_current_entries(include_ignore=True):
+                if (
+                    _normalize_ble_address(entry.options.get("ble_address") or entry.data.get("ble_address")) == norm_addr
+                    or entry.unique_id == f"ble:{norm_addr}"
+                ):
                     return self.async_abort(reason="already_configured")
             # A Wi-Fi entry has no BLE address, but it knows the kettle's name, which is
             # also its BLE local name: match on that so the same kettle is not offered again.
@@ -1637,6 +1753,7 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
         address = self.context.get("ble_address")
         if not address:
             return self.async_abort(reason="active_proxy_required")
+        self._abort_if_kettle_name_configured(self.context.get("device_name"), mac=self.context.get("mac"))
         await self.async_set_unique_id(self._ble_unique_id(address), raise_on_progress=False)
         self._abort_if_unique_id_configured()
         data = {"connection_mode": "ble", **self._ble_entry_data()}
@@ -1664,9 +1781,8 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
                 if not await _probe_kettle(session, base_url):
                     errors["base_url"] = "not_fellow_stagg"
                 else:
-                    await self.async_set_unique_id(base_url)
-                    self._abort_if_unique_id_configured()
-                    self._async_abort_entries_match({"base_url": base_url})
+                    base_url = _norm_url(base_url)
+                    await self._async_set_network_unique_id(base_url)
                     data = {"base_url": base_url}
                     data.update(self._ble_entry_data())
                     if data.get("ble_address"):
@@ -1772,6 +1888,12 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
         for key, source in (("device_name", "name"), ("firmware", "firmware")):
             if info.get(source):
                 self.context[key] = info[source]
+        # The advert may have had no name (ble:<addr> key); now key by the kettle's name so
+        # an entry or an Ignore under that name holds.
+        self._abort_if_kettle_name_configured(self.context.get("device_name"))
+        if uid := kettle_unique_id(self.context.get("device_name")):
+            await self.async_set_unique_id(uid, raise_on_progress=False)
+            self._abort_if_unique_id_configured()
         if info.get("mac"):
             self.context["mac"] = format_mac(info["mac"])
             for entry in self._async_current_entries():
@@ -1821,6 +1943,7 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
             elif mode == "auto" and not await _probe_kettle(async_get_clientsession(self.hass), url):
                 errors["base"] = "cannot_connect"
             else:
+                self._abort_if_kettle_name_configured(self.context.get("device_name"), mac=self.context.get("mac"))
                 await self.async_set_unique_id(self._ble_unique_id(address), raise_on_progress=False)
                 self._abort_if_unique_id_configured()
                 for entry in self._async_current_entries():
@@ -1989,9 +2112,8 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
         session = async_get_clientsession(self.hass)
         if not await _probe_kettle(session, choice):
             return await self._async_step_scan_network_show_result()
-        await self.async_set_unique_id(choice)
-        self._abort_if_unique_id_configured()
-        self._async_abort_entries_match({"base_url": choice})
+        choice = _norm_url(choice)
+        await self._async_set_network_unique_id(choice)
         return await self._async_add_network_kettle(choice)
 
     async def _async_add_network_kettle(self, base_url):
@@ -2010,6 +2132,8 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
                 self.context["ble_address"] = address
                 self.context["ble_name"] = name
                 return await self.async_step_connection_check()
+        self._abort_if_kettle_name_configured(self.context.get("device_name"), mac=self.context.get("mac"))
+        self._abort_if_url_configured(base_url)
         return self.async_create_entry(
             title=f"Fellow Stagg ({base_url})",
             data={"base_url": base_url, **self._ble_entry_data()},
@@ -2029,9 +2153,8 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
                 if not await _probe_kettle(session, base_url):
                     errors["base_url"] = "not_fellow_stagg"
                 else:
-                    await self.async_set_unique_id(base_url)
-                    self._abort_if_unique_id_configured()
-                    self._async_abort_entries_match({"base_url": base_url})
+                    base_url = _norm_url(base_url)
+                    await self._async_set_network_unique_id(base_url)
                     return await self._async_add_network_kettle(base_url)
         found = self.context.get("discovery_scan_found") or []
         description = (
