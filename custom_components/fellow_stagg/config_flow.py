@@ -1438,10 +1438,16 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
     async def async_step_ignore(self, user_input: dict[str, Any]) -> FlowResult:
         """Ignore a discovery; keep its BLE address so Ignore holds under the ble: or name key."""
         await self.async_set_unique_id(user_input["unique_id"], raise_on_progress=False)
-        # This step runs on the discovery flow itself, so its own context holds the address.
         data: dict[str, Any] = {}
         if address := self.context.get("ble_address"):
             data["ble_address"] = address
+        else:
+            # HA starts Ignore as a separate flow; the address is in the open discovery flow.
+            for flow in self._async_in_progress(include_uninitialized=True):
+                ctx = flow.get("context") or {}
+                if ctx.get("unique_id") == self.unique_id and ctx.get("ble_address"):
+                    data["ble_address"] = ctx["ble_address"]
+                    break
         return self.async_create_entry(title=user_input["title"], data=data)
 
     def _ble_entry_data(self) -> dict[str, Any]:
