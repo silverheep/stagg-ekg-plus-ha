@@ -1411,9 +1411,26 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
             )
         except Exception:  # noqa: BLE001 - muted CLI or native HTTP: fall back to the URL
             device_name = None
+        # BLE context (an earlier BLE pick) belongs to this URL only when verified: the probed
+        # CLI name matches it, or the URL is the one that kettle itself reported over BLE.
+        # Otherwise drop it, so a typed URL never inherits another kettle's name/address/MAC.
+        probed_uid = kettle_unique_id(device_name)
+        verified = (
+            bool(probed_uid)
+            and probed_uid in (
+                kettle_unique_id(self.context.get("device_name")),
+                kettle_unique_id(self.context.get("ble_name")),
+            )
+        ) or (
+            bool(self.context.get("ble_suggested_url"))
+            and _norm_url(self.context.get("ble_suggested_url")) == _norm_url(base_url)
+        )
+        if not verified:
+            for key in ("ble_address", "ble_name", "device_name", "mac", "ble_suggested_url"):
+                self.context.pop(key, None)
         if device_name:
             self.context["device_name"] = device_name
-        name = device_name or self.context.get("device_name")
+        name = device_name or (self.context.get("device_name") if verified else None)
         self._abort_if_kettle_name_configured(name, mac=self.context.get("mac"))
         await self.async_set_unique_id(kettle_unique_id(name) or _norm_url(base_url), raise_on_progress=False)
         self._abort_if_unique_id_configured()
@@ -1421,12 +1438,10 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
     async def async_step_ignore(self, user_input: dict[str, Any]) -> FlowResult:
         """Ignore a discovery; keep its BLE address so Ignore holds under the ble: or name key."""
         await self.async_set_unique_id(user_input["unique_id"], raise_on_progress=False)
+        # This step runs on the discovery flow itself, so its own context holds the address.
         data: dict[str, Any] = {}
-        for flow in self._async_in_progress(include_uninitialized=True):
-            ctx = flow.get("context") or {}
-            if ctx.get("unique_id") == self.unique_id and ctx.get("ble_address"):
-                data["ble_address"] = ctx["ble_address"]
-                break
+        if address := self.context.get("ble_address"):
+            data["ble_address"] = address
         return self.async_create_entry(title=user_input["title"], data=data)
 
     def _ble_entry_data(self) -> dict[str, Any]:
