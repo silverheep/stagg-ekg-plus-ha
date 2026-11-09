@@ -1333,7 +1333,6 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
     """Handle a config flow for the Fellow Stagg integration."""
 
     VERSION = 2
-    CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
 
     @staticmethod
     def _entry_has_kettle_name(entry: config_entries.ConfigEntry, uid: str) -> bool:
