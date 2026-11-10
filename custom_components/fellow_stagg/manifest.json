@@ -45,11 +45,11 @@
   ],
   "documentation": "https://github.com/bramboe/stagg-ekg-plus-ha",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/bramboe/stagg-ekg-plus-ha/issues",
+  "issue_tracker": "https://github.com/silverheep/stagg-ekg-plus-ha/issues",
   "requirements": [
     "bleak-retry-connector>=4.0.0"
   ],
-  "version": "1.3.6",
+  "version": "1.3.7",
   "zeroconf": [
     "_http._tcp.local."
   ]
