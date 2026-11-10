@@ -26,7 +26,12 @@ _LOGGER = logging.getLogger(__name__)
 
 import voluptuous as vol
 from homeassistant import config_entries, data_entry_flow
-from homeassistant.config_entries import SOURCE_IGNORE, SOURCE_ZEROCONF
+from homeassistant.config_entries import (
+    DISCOVERY_SOURCES,
+    SOURCE_IGNORE,
+    SOURCE_ZEROCONF,
+    ConfigEntryState,
+)
 from homeassistant.components import bluetooth, network
 from homeassistant.components.bluetooth import (
     async_discovered_service_info,
@@ -1390,6 +1395,37 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
             self.hass.config_entries.async_schedule_reload(entry.entry_id)
         raise data_entry_flow.AbortFlow("already_configured")
 
+    def _abort_if_unique_id_configured_and_reload(self, updates: dict[str, Any]) -> None:
+        """Core's unique-id abort with updates, scheduling the reload here instead of in Core.
+
+        Core reports a usage warning when it reloads an entry that has an update listener
+        (ours deliberately skips data-only changes), so it is told not to reload, and an
+        entry whose data changed (e.g. a new base_url) is reloaded here. Core still reloads
+        a SETUP_RETRY entry on discovery by itself; that case is left to it.
+        """
+        entry = (
+            self.hass.config_entries.async_entry_for_domain_unique_id(
+                self.handler, self.unique_id
+            )
+            if self.unique_id is not None
+            else None
+        )
+        old_data = dict(entry.data) if entry is not None else None
+        try:
+            self._abort_if_unique_id_configured(updates=updates, reload_on_update=False)
+        except data_entry_flow.AbortFlow:
+            if (
+                entry is not None
+                and dict(entry.data) != old_data
+                and entry.state in (ConfigEntryState.LOADED, ConfigEntryState.SETUP_RETRY)
+                and not (
+                    self.source in DISCOVERY_SOURCES
+                    and entry.state is ConfigEntryState.SETUP_RETRY
+                )
+            ):
+                self.hass.config_entries.async_schedule_reload(entry.entry_id)
+            raise
+
     def _abort_if_url_configured(self, base_url: str | None) -> None:
         """Abort when an entry (or, for discovery, an ignored URL-keyed one) has this URL, normalized."""
         norm = _norm_url(base_url)
@@ -1510,7 +1546,7 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
         self._abort_if_kettle_name_configured(
             self.context.get("device_name"), updates=updates, mac=self.context.get("mac")
         )
-        self._abort_if_unique_id_configured(updates=updates)
+        self._abort_if_unique_id_configured_and_reload(updates)
         self._abort_if_url_configured(base_url)
         data = {"base_url": base_url, "connection_mode": "auto", **self._ble_entry_data()}
         return self.async_create_entry(title=f"Fellow Stagg ({base_url})", data=data)
@@ -1697,7 +1733,7 @@ class FellowStaggConfigFlow(_WifiSetupMixin, config_entries.ConfigFlow, domain=D
 
         # The kettle's name when the CLI gives it (stable across IP changes), else base_url
         await self.async_set_unique_id(kettle_unique_id(device_name) or _norm_url(base_url))
-        self._abort_if_unique_id_configured(updates={"base_url": base_url})
+        self._abort_if_unique_id_configured_and_reload({"base_url": base_url})
         if device_name:
             self.context["device_name"] = device_name
 

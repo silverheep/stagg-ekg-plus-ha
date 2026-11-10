@@ -15,7 +15,7 @@ from homeassistant.const import (
     CONF_PLATFORM,
     CONF_TYPE,
 )
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HassJob, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.trigger import TriggerActionType, TriggerInfo
 from homeassistant.helpers.typing import ConfigType
@@ -108,6 +108,10 @@ async def async_attach_trigger(
         from_state = "on"
         to_state = "off"
 
+    trigger_data = trigger_info["trigger_data"]
+    job = HassJob(action)
+
+    @callback
     def _on_state_change(event):
         if event.data.get("new_state") is None:
             return
@@ -116,6 +120,7 @@ async def async_attach_trigger(
         old = old_state.state if old_state else None
         if old == from_state and new == to_state:
             trigger_payload = {
+                **trigger_data,
                 "platform": "device",
                 "device_id": config[CONF_DEVICE_ID],
                 "domain": DOMAIN,
@@ -124,7 +129,9 @@ async def async_attach_trigger(
                 "from_state": {"state": old},
                 "to_state": {"state": new},
             }
-            hass.async_run_job(action, {"trigger": trigger_payload})
+            hass.async_run_hass_job(
+                job, {"trigger": trigger_payload}, event.context
+            )
 
     return async_track_state_change_event(
         hass, [entity_id], _on_state_change

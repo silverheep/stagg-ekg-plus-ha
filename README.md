@@ -63,7 +63,7 @@ Native HTTP detection requires valid status and settings responses. A firmware v
 4. Choose your connection mode. Wi-Fi needs the kettle URL; Bluetooth needs its discovered address; Automatic needs both.
 5. For an existing entry, use **Configure → Connection** to change modes without deleting the entry. Polling settings are configured separately and retained.
 
-Existing entries default to Wi-Fi. Home Assistant **2026.10.0** is the runtime used by the integration tests. HACS metadata still declares **2024.4.0** as its minimum; compatibility with earlier releases has not been validated with the current integration.
+Existing entries default to Wi-Fi. Home Assistant **2026.11.0** is the minimum, declared in the HACS metadata: the climate entity uses the `native_` temperature properties that Core introduced in that release.
 
 Wi-Fi setup over Bluetooth is an explicit experimental option for an existing Wi-Fi entry with a known BLE address. Persistence across a kettle reboot is unconfirmed. Bluetooth-only mode does not offer it and does not disable the kettle's own Wi-Fi radio or previously configured network.
 
