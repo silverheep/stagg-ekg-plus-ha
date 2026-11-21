@@ -520,7 +520,7 @@
     },
     "set_existing_schedule_mode": {
       "name": "Change existing schedule mode",
-      "description": "Change a physically configured future schedule to once/daily, or disable it. Firmware 1.2.26 with Bluetooth or Wi-Fi required. Once/daily cannot be read back: check the physical menu. Does not change time or temperature.",
+      "description": "Change a physically configured future schedule to once/daily, or disable it. Firmware 1.2.26 or 1.2.28 with Bluetooth or Wi-Fi required. Once/daily cannot be read back: check the physical menu. Does not change time or temperature.",
       "fields": {
         "mode": {
           "name": "Mode"
@@ -529,7 +529,7 @@
     },
     "restore_standby_display": {
       "name": "Restore standby display (Wi-Fi)",
-      "description": "Temporarily turn the standby clock off and restore its original digital/analog mode. Requires firmware 1.2.26, Wi-Fi, standby and planning off. Check the visual result."
+      "description": "Temporarily turn the standby clock off and restore its original digital/analog mode. Requires firmware 1.2.26 or 1.2.28, Wi-Fi, standby and planning off. Check the visual result."
     }
   },
   "device_automation": {
@@ -541,7 +541,7 @@
   "issues": {
     "cli_muted": {
       "title": "No valid CLI data",
-      "description": "Firmware {version} does not return valid CLI data. Native HTTP is detected from valid responses; BLE is available for 1.2.26. This integration does not switch firmware automatically. The other partition reports {other_version}."
+      "description": "Firmware {version} does not return valid CLI data. Native HTTP is detected from valid responses; BLE is available for 1.2.26 and 1.2.28. This integration does not switch firmware automatically. The other partition reports {other_version}."
     },
     "firmware_staged": {
       "title": "Firmware {staged} is stored on the kettle",

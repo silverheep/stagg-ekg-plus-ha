@@ -52,6 +52,7 @@ Home Assistant chooses the reachable connectable Bluetooth adapter/proxy. ESPHom
 | **1.1.x with usable CLI** | Legacy Wi-Fi controls, schedules, clock synchronization and supported extras. BLE writes are disabled. |
 | **1.2.24 with muted CLI** | No guaranteed control or recovery path. Native endpoints are unvalidated. Compatible BLE status may be readable, but writes are disabled. |
 | **1.2.26** | Native HTTP status/settings and Wi-Fi planning; BLE status/settings/power, planning and sounds. Physical acceptance remains incomplete for some operations. |
+| **1.2.28** | Accepted for the same ordinary controls as 1.2.26 on the basis of firmware analysis; awaits hardware validation. Factory reset and firmware upload remain 1.2.26 only. |
 
 Native HTTP detection requires valid status and settings responses. A firmware version string or Bluetooth advertisement alone does not establish control support.
 

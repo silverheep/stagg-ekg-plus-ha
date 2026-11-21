@@ -520,7 +520,7 @@
     },
     "set_existing_schedule_mode": {
       "name": "Bestehenden Zeitplan ändern",
-      "description": "Einmalig/täglich für einen am Gerät eingerichteten zukünftigen Zeitplan wählen oder ausschalten. Firmware 1.2.26 und Bluetooth oder WLAN erforderlich. Einmalig/täglich ist nicht auslesbar: Gerätemenü prüfen. Zeit und Temperatur bleiben gleich.",
+      "description": "Einmalig/täglich für einen am Gerät eingerichteten zukünftigen Zeitplan wählen oder ausschalten. Firmware 1.2.26 oder 1.2.28 und Bluetooth oder WLAN erforderlich. Einmalig/täglich ist nicht auslesbar: Gerätemenü prüfen. Zeit und Temperatur bleiben gleich.",
       "fields": {
         "mode": {
           "name": "Modus"
@@ -529,7 +529,7 @@
     },
     "restore_standby_display": {
       "name": "Standbyanzeige wiederherstellen (WLAN)",
-      "description": "Standbyuhr kurz ausschalten und ursprünglichen Digital-/Analogmodus wiederherstellen. Erfordert Firmware 1.2.26, WLAN, Standby und ausgeschalteten Zeitplan. Anzeige prüfen."
+      "description": "Standbyuhr kurz ausschalten und ursprünglichen Digital-/Analogmodus wiederherstellen. Erfordert Firmware 1.2.26 oder 1.2.28, WLAN, Standby und ausgeschalteten Zeitplan. Anzeige prüfen."
     }
   },
   "device_automation": {
@@ -541,7 +541,7 @@
   "issues": {
     "cli_muted": {
       "title": "Keine gültigen CLI-Daten",
-      "description": "Firmware {version} liefert keine gültigen CLI-Daten. Native HTTP-Funktionen werden anhand gültiger Antworten erkannt. BLE kann auf 1.2.26 verwendet werden. Diese Integration startet keinen automatischen Firmwarewechsel. Die andere Partition meldet {other_version}."
+      "description": "Firmware {version} liefert keine gültigen CLI-Daten. Native HTTP-Funktionen werden anhand gültiger Antworten erkannt. BLE kann auf 1.2.26 und 1.2.28 verwendet werden. Diese Integration startet keinen automatischen Firmwarewechsel. Die andere Partition meldet {other_version}."
     },
     "firmware_staged": {
       "title": "Firmware {staged} ist auf dem Kessel gespeichert",

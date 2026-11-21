@@ -520,7 +520,7 @@
     },
     "set_existing_schedule_mode": {
       "name": "Modus bestaande planning wijzigen",
-      "description": "Wijzig een fysiek ingestelde toekomstige planning naar eenmalig/dagelijks, of schakel deze uit. Vereist firmware 1.2.26 en Bluetooth of wifi. Eenmalig/dagelijks kan niet worden teruggelezen: controleer het ketelmenu. Tijd en temperatuur blijven gelijk.",
+      "description": "Wijzig een fysiek ingestelde toekomstige planning naar eenmalig/dagelijks, of schakel deze uit. Vereist firmware 1.2.26 of 1.2.28 en Bluetooth of wifi. Eenmalig/dagelijks kan niet worden teruggelezen: controleer het ketelmenu. Tijd en temperatuur blijven gelijk.",
       "fields": {
         "mode": {
           "name": "Modus"
@@ -529,7 +529,7 @@
     },
     "restore_standby_display": {
       "name": "Standbyscherm herstellen (wifi)",
-      "description": "Zet de standbyklok tijdelijk uit en herstel de oorspronkelijke digitale/analoge weergave. Vereist firmware 1.2.26, wifi, standby en planning uit. Controleer het scherm."
+      "description": "Zet de standbyklok tijdelijk uit en herstel de oorspronkelijke digitale/analoge weergave. Vereist firmware 1.2.26 of 1.2.28, wifi, standby en planning uit. Controleer het scherm."
     }
   },
   "device_automation": {
@@ -541,7 +541,7 @@
   "issues": {
     "cli_muted": {
       "title": "Geen geldige CLI-gegevens",
-      "description": "Firmware {version} geeft geen geldige CLI-gegevens. Native HTTP wordt herkend aan geldige antwoorden; BLE is beschikbaar voor 1.2.26. De integratie wisselt firmware niet automatisch. De andere partitie meldt {other_version}."
+      "description": "Firmware {version} geeft geen geldige CLI-gegevens. Native HTTP wordt herkend aan geldige antwoorden; BLE is beschikbaar voor 1.2.26 en 1.2.28. De integratie wisselt firmware niet automatisch. De andere partitie meldt {other_version}."
     },
     "firmware_staged": {
       "title": "Firmware {staged} staat op de kettle",

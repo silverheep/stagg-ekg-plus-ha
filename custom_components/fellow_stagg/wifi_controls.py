@@ -5,17 +5,20 @@ import asyncio
 import re
 import math
 
+from .const import SUPPORTED_CONTROL_FIRMWARE_TEXT, is_supported_control_firmware
 from .protocol import CommandUncertain, UnsupportedCapability
 
 
 class WifiControls:
     async def _require_native_cli(self, session):
         if self.mode == "ble" or not self.legacy or self.http_backend != "native_http":
-            raise UnsupportedCapability("This action requires 1.2.26 Wi-Fi; BLE-only is unsupported")
+            raise UnsupportedCapability(
+                f"This action requires Wi-Fi on firmware {SUPPORTED_CONTROL_FIRMWARE_TEXT}; BLE-only is unsupported"
+            )
         info = await self.legacy.async_get_partitions(session)
         version = (info or {}).get("current_version")
-        if not isinstance(version, str) or not re.fullmatch(r"1\.2\.26(?:\s+C)?", version.strip()):
-            raise UnsupportedCapability("This action is validated only on firmware 1.2.26")
+        if not is_supported_control_firmware(version):
+            raise UnsupportedCapability(f"This action is validated only on firmware {SUPPORTED_CONTROL_FIRMWARE_TEXT}")
 
     async def async_set_existing_schedule_mode(self, session, mode):
         if mode not in ("off", "once", "daily"):
