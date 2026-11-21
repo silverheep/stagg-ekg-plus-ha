@@ -520,7 +520,7 @@
     },
     "set_existing_schedule_mode": {
       "name": "Modifier une programmation existante",
-      "description": "Choisir unique/quotidien pour une programmation future configurée sur la bouilloire, ou la désactiver. Nécessite le firmware 1.2.26 et le Bluetooth ou le Wi-Fi. Le mode ne peut pas être relu : vérifier le menu. Heure et température conservées.",
+      "description": "Choisir unique/quotidien pour une programmation future configurée sur la bouilloire, ou la désactiver. Nécessite le firmware 1.2.26 ou 1.2.28 et le Bluetooth ou le Wi-Fi. Le mode ne peut pas être relu : vérifier le menu. Heure et température conservées.",
       "fields": {
         "mode": {
           "name": "Mode"
@@ -529,7 +529,7 @@
     },
     "restore_standby_display": {
       "name": "Restaurer l’écran de veille (Wi-Fi)",
-      "description": "Désactiver brièvement l’horloge puis restaurer son mode numérique/analogique initial. Nécessite le firmware 1.2.26, le Wi-Fi, la veille et une programmation désactivée. Vérifier l’écran."
+      "description": "Désactiver brièvement l’horloge puis restaurer son mode numérique/analogique initial. Nécessite le firmware 1.2.26 ou 1.2.28, le Wi-Fi, la veille et une programmation désactivée. Vérifier l’écran."
     }
   },
   "device_automation": {
@@ -541,7 +541,7 @@
   "issues": {
     "cli_muted": {
       "title": "Aucune donnée CLI valide",
-      "description": "Le firmware {version} ne fournit aucune donnée CLI valide. Les fonctions HTTP natives sont détectées à partir de réponses valides. Le Bluetooth est disponible sur 1.2.26. Cette intégration ne change pas automatiquement de firmware. L’autre partition indique {other_version}."
+      "description": "Le firmware {version} ne fournit aucune donnée CLI valide. Les fonctions HTTP natives sont détectées à partir de réponses valides. Le Bluetooth est disponible sur 1.2.26 et 1.2.28. Cette intégration ne change pas automatiquement de firmware. L’autre partition indique {other_version}."
     },
     "firmware_staged": {
       "title": "Firmware {staged} stocké sur la bouilloire",

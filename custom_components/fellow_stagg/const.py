@@ -155,3 +155,30 @@ def kettle_unique_id(name: str | None) -> str | None:
   """
   n = (name or "").strip().lower()
   return n if re.fullmatch(r"ekg-[0-9a-f][0-9a-f-]*", n) else None
+
+
+# Kettle firmware accepted for ORDINARY controls only: BLE writes (power, settings, sounds,
+# schedules, Bricky, otadis, console diagnostics), the connect-time B4 status-interval write and
+# the native Wi-Fi console controls. 1.2.26 is physically tested; 1.2.28 is accepted on the basis
+# of static analysis of its image (same GATT UUIDs, B4/B5/B1/B6 framing, /temp JSON, partition
+# table and console commands) and awaits hardware validation. Factory reset and native firmware
+# upload keep their own 1.2.26-only checks and do not use this set.
+SUPPORTED_CONTROL_FIRMWARE = frozenset({"1.2.26", "1.2.28"})
+# "1.2.26 and 1.2.28", built from the set so user-facing messages cannot drift from it.
+SUPPORTED_CONTROL_FIRMWARE_TEXT = " and ".join(sorted(SUPPORTED_CONTROL_FIRMWARE))
+
+
+def firmware_base_version(version: object) -> str | None:
+  """First whitespace-separated token of a firmware version ("1.2.26 C" -> "1.2.26").
+
+  None for None, a non-string, an empty or a whitespace-only value. Never raises.
+  """
+  if not isinstance(version, str):
+    return None
+  tokens = version.split()
+  return tokens[0] if tokens else None
+
+
+def is_supported_control_firmware(version: object) -> bool:
+  """True when the base version token is exactly one in SUPPORTED_CONTROL_FIRMWARE."""
+  return firmware_base_version(version) in SUPPORTED_CONTROL_FIRMWARE

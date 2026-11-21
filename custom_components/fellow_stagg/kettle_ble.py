@@ -12,6 +12,7 @@ import struct
 from ipaddress import IPv4Address, IPv4Network
 from time import monotonic
 
+from .const import SUPPORTED_CONTROL_FIRMWARE_TEXT, is_supported_control_firmware
 from .protocol import (
     PreferenceControls, preference_payload, B1, B4, B5, B6, B7, CommandUncertain, ProtocolError, UnsupportedCapability,
     decode_settings, decode_status, temperature_payload, units_payload, clock_payload, clock_readback_matches,
@@ -72,7 +73,7 @@ class KettleBleClient(BleExtras, PreferenceControls):
 
     @property
     def supports_writes(self):
-        return bool(self.firmware and self.firmware.split() and self.firmware.split()[0] == "1.2.26")
+        return is_supported_control_firmware(self.firmware)
 
     @property
     def supports_power(self):
@@ -172,7 +173,7 @@ class KettleBleClient(BleExtras, PreferenceControls):
                     if "notify" in characteristic.properties:
                         await self.client.start_notify(char, lambda sender, raw, c=char: self._notify(generation, c, raw))
                 self._accept_settings(decode_settings(bytes(await self.client.read_gatt_char(B5))))
-                if self.firmware.split()[0] == "1.2.26" and "interval_write" in self.capabilities:
+                if is_supported_control_firmware(self.firmware) and "interval_write" in self.capabilities:
                     # New random session resets the dispatcher ordinal; B4 type 3 is
                     # quick-status interval only. Do not touch debug or Wi-Fi settings.
                     await self.client.write_gatt_char(B4, struct.pack("<HHI", 0, 0, secrets.randbits(32)), response=True)
@@ -256,7 +257,7 @@ class KettleBleClient(BleExtras, PreferenceControls):
 
     def _require_supported(self, capability):
         if not self.supports_writes or capability not in self.capabilities:
-            raise UnsupportedCapability("BLE writes are validated only on firmware 1.2.26")
+            raise UnsupportedCapability(f"BLE writes are validated only on firmware {SUPPORTED_CONTROL_FIRMWARE_TEXT}")
 
     async def async_set_power(self, session, power_on):
         async with self._command_lock:
@@ -476,7 +477,9 @@ class KettleBleClient(BleExtras, PreferenceControls):
         """One fixed read-only CLI query; no reconnect, replay or power command."""
         async with self._command_lock:
             if not self.fresh or not self.supports_writes:
-                raise UnsupportedCapability("An existing current 1.2.26 BLE connection is required")
+                raise UnsupportedCapability(
+                    f"An existing current BLE connection on firmware {SUPPORTED_CONTROL_FIRMWARE_TEXT} is required"
+                )
             if self.data.get("power") is not False:
                 raise UnsupportedCapability("Console investigation requires current standby state; no command sent")
             client, generation = self.client, self._generation

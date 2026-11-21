@@ -22,6 +22,8 @@ This HACS update retains the older CLI path and adds **native HTTP reading/setti
 
 Once/Daily planning on firmware 1.2.26 requires Wi-Fi, standby and physical repeat-menu confirmation. Lock firmware can automatically switch partitions over HTTP; it does not block update downloads and may rely on an earlier power state when reverting firmware.
 
+**Firmware 1.2.28** is accepted for the same ordinary controls as 1.2.26 on the basis of firmware analysis and awaits hardware validation. Factory reset and firmware upload remain 1.2.26 only.
+
 See the [README](https://github.com/bramboe/stagg-ekg-plus-ha#readme) for installation, capabilities and limitations.
 
 ## Independent community project

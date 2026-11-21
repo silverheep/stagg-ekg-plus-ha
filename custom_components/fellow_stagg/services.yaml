@@ -196,7 +196,7 @@ probe_schedule_console:
 
 set_existing_schedule_mode:
   name: Change existing schedule mode
-  description: Firmware 1.2.26 with Bluetooth or Wi-Fi. Change the mode of an existing future schedule without changing its time or temperature. Once/daily requires checking the physical menu; it cannot be read back.
+  description: Firmware 1.2.26 or 1.2.28 with Bluetooth or Wi-Fi. Change the mode of an existing future schedule without changing its time or temperature. Once/daily requires checking the physical menu; it cannot be read back.
   fields:
     entry_id:
       selector:
@@ -212,7 +212,7 @@ set_existing_schedule_mode:
 
 restore_standby_display:
   name: Restore standby display (Wi-Fi)
-  description: Firmware 1.2.26 with Wi-Fi only. Cycle the standby clock off and restore its original mode. Requires standby with planning off; check the visual result.
+  description: Firmware 1.2.26 or 1.2.28 with Wi-Fi only. Cycle the standby clock off and restore its original mode. Requires standby with planning off; check the visual result.
   fields:
     entry_id:
       selector:
